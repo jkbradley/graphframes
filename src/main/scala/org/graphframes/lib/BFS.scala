@@ -222,7 +222,7 @@ private object BFS extends Logging with Serializable {
       val ordered = paths.columns.sortBy(rank _)
       paths.select(ordered.map(col): _*)
     } else {
-      logInfo(s"GraphFrame.bfs failed to find a path of length <= $maxPathLength.")
+      println(s"GraphFrame.bfs failed to find a path of length <= $maxPathLength.")
       // Return empty DataFrame
       g.sqlContext.createDataFrame(
         g.sqlContext.sparkContext.parallelize(Seq.empty[Row]),

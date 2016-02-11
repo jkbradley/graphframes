@@ -19,12 +19,10 @@ package org.graphframes
 
 import org.scalatest.{FunSuite, Outcome}
 
-import org.apache.spark.Logging
-
 /**
  * Base abstract class for all unit tests in Spark for handling common functionality.
  */
-private[graphframes] abstract class SparkFunSuite extends FunSuite with Logging {
+private[graphframes] abstract class SparkFunSuite extends FunSuite {
 
   /**
    * Log the suite name and the test name before and after each test.
@@ -38,10 +36,10 @@ private[graphframes] abstract class SparkFunSuite extends FunSuite with Logging 
     val suiteName = this.getClass.getName
     val shortSuiteName = suiteName.replaceAll("org.apache.spark", "o.a.s")
     try {
-      logInfo(s"\n\n===== TEST OUTPUT FOR $shortSuiteName: '$testName' =====\n")
+      println(s"\n\n===== TEST OUTPUT FOR $shortSuiteName: '$testName' =====\n")
       test()
     } finally {
-      logInfo(s"\n\n===== FINISHED $shortSuiteName: '$testName' =====\n")
+      println(s"\n\n===== FINISHED $shortSuiteName: '$testName' =====\n")
     }
   }
 

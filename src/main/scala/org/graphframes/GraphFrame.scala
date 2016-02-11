@@ -472,24 +472,28 @@ object GraphFrame extends Serializable {
   /**
    * Create a new [[GraphFrame]] from vertex and edge `DataFrame`s.
    *
-   * @param vertices  Vertex DataFrame.  This must include a column "id" containing unique vertex IDs.
+   * @param v  Vertex DataFrame.  This must include a column "id" containing unique vertex IDs.
    *           All other columns are treated as vertex attributes.
-   * @param edges  Edge DataFrame.  This must include columns "src" and "dst" containing source and
+   * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
    *           destination vertex IDs.  All other columns are treated as edge attributes.
    * @return  New [[GraphFrame]] instance
    */
-  def apply(vertices: DataFrame, edges: DataFrame): GraphFrame = {
-    require(vertices.columns.contains(ID),
+  def apply(v: DataFrame, e: DataFrame): GraphFrame = {
+    require(v.columns.contains(ID),
       s"Vertex ID column '$ID' missing from vertex DataFrame, which has columns: "
-        + vertices.columns.mkString(","))
-    require(edges.columns.contains(SRC),
+        + v.columns.mkString(","))
+    require(e.columns.contains(SRC),
       s"Source vertex ID column '$SRC' missing from edge DataFrame, which has columns: "
-        + edges.columns.mkString(","))
-    require(edges.columns.contains(DST),
+        + e.columns.mkString(","))
+    require(e.columns.contains(DST),
       s"Destination vertex ID column '$DST' missing from edge DataFrame, which has columns: "
-        + edges.columns.mkString(","))
+        + e.columns.mkString(","))
 
-    new GraphFrame(vertices, edges)
+    import org.graphframes.joinelimination.JoinEliminationHelper._
+    registerRules(v.sqlContext)
+    val vK = v.uniqueKey(ID)
+    val eK = e.foreignKey(SRC, vK, ID).foreignKey(DST, vK, ID)
+    new GraphFrame(vK, eK)
   }
 
   /**
