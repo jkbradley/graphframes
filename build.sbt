@@ -3,6 +3,7 @@
 
 val sparkVer = sys.props.getOrElse("spark.version", "1.4.1")
 val sparkBranch = sparkVer.substring(0, 3)
+
 val defaultScalaVer = sparkBranch match {
   case "1.4" => "2.10.4"
   case "1.5" => "2.10.4"
