@@ -17,6 +17,7 @@
 
 package org.graphframes.joinelimination
 
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.Alias
@@ -57,8 +58,10 @@ object ResolveForeignKeyReferences extends Rule[LogicalPlan] {
                 case _ => false
               }
               if (!referencedAttrIsUnique) {
-                throw new Exception("Foreign keys can only reference unique keys, but " +
-                  s"$k references $referencedAttr which is not unique.")
+                throw new ForeignKeyReferenceException(
+                  "Foreign keys can only reference unique keys, but " +
+                    s"$k references $referencedAttr which is not unique.",
+                  h.origin.line, h.origin.startPosition)
               }
             }
 
