@@ -45,8 +45,8 @@ object KeyHint {
         case r: AttributeReference => (r, r)
       })
       collectKeys(child).collect {
-        case UniqueKey(attr) if aliasMap.contains(attr) =>
-          UniqueKey(aliasMap(attr))
+        case UniqueKey(attr, keyId) if aliasMap.contains(attr) =>
+          UniqueKey(aliasMap(attr), keyId)
         case ForeignKey(attr, referencedAttr) if aliasMap.contains(attr) =>
           ForeignKey(aliasMap(attr), referencedAttr)
       }
@@ -74,11 +74,6 @@ case class KeyHint(newKeys: Seq[Key], child: LogicalPlan) extends UnaryNode {
 
   override lazy val resolved: Boolean = newKeys.forall(_.resolved) && childrenResolved
 
-  def foreignKeyReferencesResolved: Boolean = newKeys.forall {
-    case ForeignKey(_, referencedAttr) => referencedAttr.resolved
-    case _ => true
-  }
-
   /** Overridden here to apply `rule` to the keys. */
   override def transformExpressionsDown(
       rule: PartialFunction[Expression, Expression]): this.type = {
@@ -90,6 +85,6 @@ case class KeyHint(newKeys: Seq[Key], child: LogicalPlan) extends UnaryNode {
   override def transformExpressionsUp(
       rule: PartialFunction[Expression, Expression]): this.type = {
     KeyHint(newKeys.map(_.transformAttribute(rule.andThen(_.asInstanceOf[Attribute]))), child)
-    .asInstanceOf[this.type]
+      .asInstanceOf[this.type]
   }
 }

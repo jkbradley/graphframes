@@ -29,52 +29,6 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.catalyst.rules.Rule
 
-object ResolveForeignKeyReferences extends Rule[LogicalPlan] {
-  def resolver: Resolver = {
-    import org.apache.spark.sql.catalyst.analysis
-    analysis.caseSensitiveResolution
-  }
-
-  def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-    case j @ Join(left, right, _, _) =>
-      j.copy(
-        left = resolveForeignKeyAcross(left, right),
-        right = resolveForeignKeyAcross(right, left))
-  }
-
-  def resolveForeignKeyAcross(plan: LogicalPlan, referencedPlan: LogicalPlan): LogicalPlan = {
-    // Resolve referenced attributes of foreign keys using the referenced relation
-    plan transform {
-      case h @ KeyHint(keys, child) if !h.foreignKeyReferencesResolved =>
-        val newKeys = keys.collect {
-          case ForeignKey(k, u @ UnresolvedAttribute(nameParts)) =>
-            val referencedAttr =
-              referencedPlan.resolve(nameParts, resolver).getOrElse(u).toAttribute
-
-            // Enforce the constraint that foreign keys can only reference unique keys
-            if (referencedAttr.resolved) {
-              val referencedAttrIsUnique = KeyHint.collectKeys(referencedPlan).exists {
-                case UniqueKey(attr) if attr semanticEquals referencedAttr => true
-                case _ => false
-              }
-              if (!referencedAttrIsUnique) {
-                throw new ForeignKeyReferenceException(
-                  "Foreign keys can only reference unique keys, but " +
-                    s"$k references $referencedAttr which is not unique.",
-                  h.origin.line, h.origin.startPosition)
-              }
-            }
-
-            ForeignKey(k, referencedAttr)
-        }
-        // Keep the old, unresolved foreign keys as well so that further invocations will pick up
-        // all instances of each referenced attribute
-        KeyHint((keys ++ newKeys).distinct, child)
-    }
-  }
-
-}
-
 /**
  * Combines two adjacent [[KeyHint]]s into one by merging their key lists.
  */

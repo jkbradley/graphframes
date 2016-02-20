@@ -18,16 +18,15 @@
 package org.graphframes.joinelimination
 
 import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.SQLConf
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 
 object JoinEliminationHelper {
-  private def rules: Seq[Rule[LogicalPlan]] = (
-    ResolveForeignKeyReferences +:
-    Seq.fill(10)(JoinElimination) :+
-    RemoveKeyHints)
+  private def rules: Seq[Rule[LogicalPlan]] =
+    Seq.fill(10)(JoinElimination) :+ RemoveKeyHints
 
   def registerRules(sqlContext: SQLContext): Unit = {
     if (!sqlContext.experimental.extraOptimizations.containsSlice(rules)) {
@@ -50,12 +49,25 @@ object JoinEliminationHelper {
      * [[DataFrame]].
      */
     def foreignKey(
-        col: String, referencedDF: DataFrame, referencedCol: String): DataFrame =
-      new DataFrame(
+        col: String, referencedDF: DataFrame, referencedCol: String): DataFrame = {
+      val resultOpt = for {
+        referencedAttr <- referencedDF.queryExecution.analyzed.resolveQuoted(
+          referencedCol, org.apache.spark.sql.catalyst.analysis.caseSensitiveResolution)
+        referencedKeyId <- KeyHint.collectKeys(referencedDF.queryExecution.analyzed).collectFirst {
+          case UniqueKey(attr, keyId) if attr semanticEquals referencedAttr.toAttribute => keyId
+        }
+      } yield new DataFrame(
         df.sqlContext,
         KeyHintCollapsing(
           KeyHint(
-            List(ForeignKey(UnresolvedAttribute(col), UnresolvedAttribute(referencedCol))),
-          df.queryExecution.logical)))
+            List(ForeignKey(UnresolvedAttribute(col), referencedKeyId)),
+            df.queryExecution.logical)))
+      resultOpt match {
+        case Some(result) => result
+        case None => throw new ForeignKeyReferenceException(
+          "Foreign keys can only reference unique keys, but " +
+            s"'$referencedCol' is not declared as unique.")
+      }
+    }
   }
 }

@@ -21,6 +21,7 @@ import org.apache.spark.sql.catalyst.expressions.Alias
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.expressions.AttributeMap
 import org.apache.spark.sql.catalyst.expressions.AttributeSet
+import org.apache.spark.sql.catalyst.expressions.ExprId
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.NamedExpression
 import org.apache.spark.sql.catalyst.planning.ExtractEquiJoinKeys
@@ -49,7 +50,9 @@ object CanEliminateUniqueKeyOuterJoin {
 
       val onlyOuterColsKept = AttributeSet(projectList).subsetOf(outer.outputSet)
 
-      val innerUniqueKeys = AttributeSet(KeyHint.collectKeys(inner).collect { case UniqueKey(attr) => attr })
+      val innerUniqueKeys = AttributeSet(KeyHint.collectKeys(inner).collect {
+        case UniqueKey(attr, _) => attr
+      })
       val innerKeyIsInvolved = innerUniqueKeys.intersect(AttributeSet(innerJoinExprs)).nonEmpty
 
       if (onlyOuterColsKept && innerKeyIsInvolved) {
@@ -118,14 +121,17 @@ object CanEliminateReferentialIntegrityJoin {
       childJoinExprs: Seq[Expression])
     : AttributeMap[Attribute] = {
     val primaryKeys =
-      AttributeSet(KeyHint.collectKeys(parent).collect { case UniqueKey(attr) => attr })
+      KeyHint.collectKeys(parent).collect { case uk: UniqueKey => uk }
     val foreignKeys = new ForeignKeyFinder(child, parent)
     AttributeMap(parentJoinExprs.zip(childJoinExprs).collect {
-      case (parentExpr: NamedExpression, childExpr: NamedExpression)
-          if primaryKeys.contains(parentExpr.toAttribute)
-          && foreignKeys.foreignKeyExists(childExpr.toAttribute, parentExpr.toAttribute) =>
-        (parentExpr.toAttribute, childExpr.toAttribute)
-    })
+      case (parentExpr: NamedExpression, childExpr: NamedExpression) =>
+        primaryKeys.find(_.attr == parentExpr.toAttribute) match {
+          case Some(UniqueKey(_, pkId))
+              if foreignKeys.foreignKeyExists(childExpr.toAttribute, pkId) =>
+            Some((parentExpr.toAttribute, childExpr.toAttribute))
+          case _ => None
+        }
+    }.flatten)
   }
 
   /**
@@ -148,45 +154,12 @@ object CanEliminateReferentialIntegrityJoin {
 }
 
 private class ForeignKeyFinder(plan: LogicalPlan, referencedPlan: LogicalPlan) {
-  val equivalent = equivalences(referencedPlan)
-
-  def foreignKeyExists(attr: Attribute, referencedAttr: Attribute): Boolean = {
+  def foreignKeyExists(attr: Attribute, referencedKeyId: ExprId): Boolean = {
     KeyHint.collectKeys(plan).exists {
-      case ForeignKey(attr2, referencedAttr2)
+      case ForeignKey(attr2, referencedKeyId2)
           if (attr semanticEquals attr2)
-            && equivalent.query(referencedAttr, referencedAttr2) => true
+            && referencedKeyId == referencedKeyId2 => true
       case _ => false
     }
-  }
-
-  private def equivalences(plan: LogicalPlan): MutableDisjointAttributeSets = {
-    val s = new MutableDisjointAttributeSets
-    plan.collect {
-      case Project(projectList, _) => projectList.collect {
-        case a @ Alias(old: Attribute, _) => s.union(old, a.toAttribute)
-      }
-    }
-    s
-  }
-}
-
-private class MutableDisjointAttributeSets() {
-  private var sets = Set[AttributeSet]()
-  def add(x: Attribute): Unit = {
-    if (!sets.exists(_.contains(x))) {
-      sets += AttributeSet(x)
-    }
-  }
-  def union(x: Attribute, y: Attribute): Unit = {
-    add(x)
-    add(y)
-    val xSet = sets.find(_.contains(x)).get
-    val ySet = sets.find(_.contains(y)).get
-    sets -= xSet
-    sets -= ySet
-    sets += (xSet ++ ySet)
-  }
-  def query(x: Attribute, y: Attribute): Boolean = {
-    (x semanticEquals y) || sets.exists(s => s.contains(x) && s.contains(y))
   }
 }

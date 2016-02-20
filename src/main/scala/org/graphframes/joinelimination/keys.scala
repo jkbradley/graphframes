@@ -18,6 +18,8 @@
 package org.graphframes.joinelimination
 
 import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.expressions.ExprId
+import org.apache.spark.sql.catalyst.expressions.NamedExpression
 
 /**
  * A key constraint on the output of a [[LogicalPlan]].
@@ -28,25 +30,27 @@ sealed abstract class Key {
 }
 
 /**
- * Declares that the values of `attr` are unique.
+ * Declares that the values of `attr` are unique. The `keyId` is used to enable [[ForeignKey]]s to
+ * reference this key regardless of attribute rewrites, so it should be preserved when transforming
+ * `attr` whenever the transformation would preserve referential integrity.
  */
-case class UniqueKey(attr: Attribute) extends Key {
+case class UniqueKey(
+    attr: Attribute,
+    keyId: ExprId = NamedExpression.newExprId) extends Key {
   override def transformAttribute(rule: PartialFunction[Attribute, Attribute]): Key =
-    UniqueKey(rule.applyOrElse(attr, identity[Attribute]))
+    UniqueKey(rule.applyOrElse(attr, identity[Attribute]), keyId)
 
   override def resolved: Boolean = attr.resolved
 }
 
 /**
- * Declares that the values of `attr` reference `referencedAttr`, which is a unique key in
- * `referencedRelation`. Note that the `referencedRelation` plan must contain a unique key
- * constraint on `referencedAttr`, and it must be resolved.
+ * Declares that the values of `attr` reference the unique key with id `referencedKeyId`.
  */
 case class ForeignKey(
     attr: Attribute,
-    referencedAttr: Attribute) extends Key {
+    referencedKeyId: ExprId) extends Key {
   override def transformAttribute(rule: PartialFunction[Attribute, Attribute]): Key =
-    ForeignKey(rule.applyOrElse(attr, identity[Attribute]), referencedAttr)
+    ForeignKey(rule.applyOrElse(attr, identity[Attribute]), referencedKeyId)
 
   override def resolved: Boolean = attr.resolved
 }

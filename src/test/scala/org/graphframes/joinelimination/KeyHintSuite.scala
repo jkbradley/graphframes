@@ -310,4 +310,16 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
       Row(2, 0)))
     checkJoinsEliminated(bestFriendInnerJoinEliminated)
   }
+
+  test("do not eliminate joins with confusingly-named foreign key referents") {
+    // bestFriend and employee do not satisfy referential integrity, but bestFriend does have a
+    // foreign key referring to the id column of a different table (itself), and employee also has
+    // an id column. This test ensures these two are not confused just because they have the same
+    // name.
+    val join = bestFriend.join(employee, bestFriend("friendId") === employee("id"), "inner")
+      .select(bestFriend("id"), bestFriend("friendId"))
+    checkAnswer(join, Seq(
+      Row(0, 1),
+      Row(2, 0)))
+  }
 }

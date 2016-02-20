@@ -18,7 +18,10 @@
 package org.graphframes.joinelimination
 
 import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
+import org.apache.spark.sql.catalyst.dsl.expressions._
+import org.apache.spark.sql.catalyst.dsl.plans._
 import org.apache.spark.sql.catalyst.expressions.Alias
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.expressions.ExprId
 import org.apache.spark.sql.catalyst.plans.FullOuter
@@ -29,14 +32,18 @@ import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.RuleExecutor
 import org.scalatest.FunSuite
-import org.apache.spark.sql.catalyst.dsl.expressions._
-import org.apache.spark.sql.catalyst.dsl.plans._
 
 class JoinEliminationSuite extends FunSuite {
   object Optimize extends RuleExecutor[LogicalPlan] {
     val batches =
       Batch("Subqueries", FixedPoint(10), EliminateSubQueries) ::
       Batch("JoinElimination", Once, JoinElimination) :: Nil
+  }
+
+  def getUniqueKeyId(plan: LogicalPlan, attr: Attribute): ExprId = {
+    KeyHint.collectKeys(plan).collectFirst {
+      case UniqueKey(attr2, keyId) if attr semanticEquals attr2 => keyId
+    }.get
   }
 
   val customer = {
@@ -52,8 +59,8 @@ class JoinEliminationSuite extends FunSuite {
       'orderId.int.notNull, 'o_customerId.int.notNull, 'o_employeeId.int)
     KeyHint(List(
       UniqueKey(r.output(0)),
-      ForeignKey(r.output(1), customer.output(0)),
-      ForeignKey(r.output(2), employee.output(0))), r)
+      ForeignKey(r.output(1), getUniqueKeyId(customer, customer.output(0))),
+      ForeignKey(r.output(2), getUniqueKeyId(employee, employee.output(0)))), r)
   }
   val bannedCustomer = {
     val r = LocalRelation('bannedCustomerName.string.notNull)
