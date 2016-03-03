@@ -18,11 +18,11 @@
 package org.graphframes.joinelimination
 
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SQLConf
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
+
 
 object JoinEliminationHelper {
   private def rules: Seq[Rule[LogicalPlan]] =

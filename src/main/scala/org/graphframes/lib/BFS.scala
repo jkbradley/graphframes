@@ -17,7 +17,7 @@
 
 package org.graphframes.lib
 
-import org.apache.spark.Logging
+import org.apache.spark.SparkLogging
 import org.apache.spark.sql.SQLHelpers._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.functions.col
@@ -128,7 +128,7 @@ class BFS private[graphframes] (private val graph: GraphFrame)
 }
 
 
-private object BFS extends Logging with Serializable {
+private object BFS extends SparkLogging with Serializable {
 
   private def run(
       g: GraphFrame,

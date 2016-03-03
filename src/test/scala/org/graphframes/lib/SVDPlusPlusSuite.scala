@@ -41,7 +41,7 @@ class SVDPlusPlusSuite extends SparkFunSuite with GraphFrameTestSparkContext {
       assert(v2.columns.contains(c))
       assert(v2.schema(c).dataType === DataTypes.DoubleType)
     }
-    val err = v2.select(GraphFrame.ID, SVDPlusPlus.COLUMN4).map {
+    val err = v2.select(GraphFrame.ID, SVDPlusPlus.COLUMN4).rdd.map {
       case Row(vid: Long, vd: Double) =>
         if (vid % 2 == 1) vd else 0.0
     }.reduce(_ + _) / g.edges.count()

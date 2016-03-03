@@ -19,7 +19,6 @@ package org.graphframes
 
 import scala.reflect.runtime.universe.TypeTag
 
-import org.apache.spark.Logging
 import org.apache.spark.graphx.{Edge, Graph}
 import org.apache.spark.sql.SQLHelpers._
 import org.apache.spark.sql._
@@ -42,7 +41,7 @@ import org.graphframes.pattern._
  */
 class GraphFrame private(
     @transient private val _vertices: DataFrame,
-    @transient private val _edges: DataFrame) extends Logging with Serializable {
+    @transient private val _edges: DataFrame) extends Serializable {
 
   import GraphFrame._
 
@@ -127,15 +126,17 @@ class GraphFrame private(
   def toGraphX: Graph[Row, Row] = {
     if (hasIntegralIdType) {
       val vv = vertices.select(col(ID).cast(LongType), nestAsCol(vertices, ATTR))
-        .map { case Row(id: Long, attr: Row) => (id, attr) }
+        .rdd.map { case Row(id: Long, attr: Row) => (id, attr) }
       val ee = edges.select(col(SRC).cast(LongType), col(DST).cast(LongType), nestAsCol(edges, ATTR))
-        .map { case Row(srcId: Long, dstId: Long, attr: Row) => Edge(srcId, dstId, attr) }
+        .rdd.map { case Row(srcId: Long, dstId: Long, attr: Row) => Edge(srcId, dstId, attr) }
       Graph(vv, ee)
     } else {
       // Compute Long vertex IDs
-      val vv = indexedVertices.select(LONG_ID, ATTR).map { case Row(long_id: Long, attr: Row) => (long_id, attr) }
-      val ee = indexedEdges.select(LONG_SRC, LONG_DST, ATTR).map { case Row(long_src: Long, long_dst: Long, attr: Row) =>
-        Edge(long_src, long_dst, attr)
+      val vv = indexedVertices.select(LONG_ID, ATTR).rdd.map {
+        case Row(long_id: Long, attr: Row) => (long_id, attr)
+      }
+      val ee = indexedEdges.select(LONG_SRC, LONG_DST, ATTR).rdd.map {
+        case Row(long_src: Long, long_dst: Long, attr: Row) => Edge(long_src, long_dst, attr)
       }
       Graph(vv, ee)
     }
@@ -256,8 +257,7 @@ class GraphFrame private(
    *
    * @param pattern  Pattern specifying a motif to search for.
    * @return  `DataFrame` containing all instances of the motif.
-   *
-   * @group motif
+    * @group motif
    */
   def find(pattern: String): DataFrame =
     findSimple(Nil, None, Pattern.parse(pattern))
@@ -502,7 +502,8 @@ object GraphFrame extends Serializable {
    *
    * Note: The [[GraphFrame.vertices]] DataFrame will be persisted at level
    *       `StorageLevel.MEMORY_AND_DISK`.
-   * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
+    *
+    * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
    *           destination vertex IDs.  All other columns are treated as edge attributes.
    * @return  New [[GraphFrame]] instance
    */

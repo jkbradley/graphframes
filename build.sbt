@@ -19,7 +19,7 @@ scalaVersion := scalaVer
 spName := "graphframes/graphframes"
 
 // Don't forget to set the version
-version := s"0.1.0-spark$sparkBranch-SNAPSHOT"
+version := s"0.1.0-spark$sparkBranch"
 
 // All Spark Packages need a license
 licenses := Seq("Apache-2.0" -> url("http://opensource.org/licenses/Apache-2.0"))
@@ -34,12 +34,19 @@ sparkComponents ++= Seq("graphx", "sql", "catalyst")
 // add any Spark Package dependencies using spDependencies.
 // e.g. spDependencies += "databricks/spark-avro:0.1"
 
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.0" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % (if (scalaVer < "2.11") "2.0" else "2.2.6") % "test"
 
 parallelExecution := false
 
-unmanagedSourceDirectories in Compile ++=
-  Seq(baseDirectory.value / "src" / "main" / (if (sparkBranch == "1.4") "spark-1.4" else "spark-x"))
+val sparkHackDir = if (sparkBranch == "1.4") {
+  "spark-1.4"
+} else if (sparkBranch == "1.5" || sparkBranch == "1.6") {
+  "spark-1.5-6"
+} else {
+  "spark-2.0"
+}
+
+unmanagedSourceDirectories in Compile ++= Seq(baseDirectory.value / "src" / "main" / sparkHackDir)
 
 scalacOptions in (Compile, doc) ++= Seq(
   "-groups",

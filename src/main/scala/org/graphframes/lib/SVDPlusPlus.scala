@@ -116,7 +116,7 @@ class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends A
 object SVDPlusPlus {
 
   private def run(graph: GraphFrame, conf: graphxlib.SVDPlusPlus.Conf): (DataFrame, Double) = {
-    val edges = graph.edges.select(GraphFrame.SRC, GraphFrame.DST, COLUMN_WEIGHT).map {
+    val edges = graph.edges.select(GraphFrame.SRC, GraphFrame.DST, COLUMN_WEIGHT).rdd.map {
       case Row(src: Long, dst: Long, w: Double) => Edge(src, dst, w)
     }
     val (gx, res) = graphxlib.SVDPlusPlus.run(edges, conf)
