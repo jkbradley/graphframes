@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.plans.RightOuter
 import org.apache.spark.sql.catalyst.plans.logical.Join
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Project
-import org.apache.spark.sql.catalyst.plans.logical.Subquery
+import org.apache.spark.sql.catalyst.plans.logical.SubqueryAlias
 import org.apache.spark.sql.catalyst.plans.logical.UnaryNode
 
 object KeyHint {
@@ -60,7 +60,7 @@ object KeyHint {
         case _ => fk(collectKeys(left) ++ collectKeys(right))
       }
 
-    case Subquery(_, child) => collectKeys(child)
+    case SubqueryAlias(_, child) => collectKeys(child)
 
     case _ => Seq.empty
   }

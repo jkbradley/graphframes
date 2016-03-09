@@ -17,7 +17,7 @@
 
 package org.graphframes.joinelimination
 
-import org.apache.spark.sql.catalyst.analysis.EliminateSubQueries
+import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.dsl.expressions._
 import org.apache.spark.sql.catalyst.dsl.plans._
 import org.apache.spark.sql.catalyst.expressions.Alias
@@ -36,7 +36,7 @@ import org.scalatest.FunSuite
 class JoinEliminationSuite extends FunSuite {
   object Optimize extends RuleExecutor[LogicalPlan] {
     val batches =
-      Batch("Subqueries", FixedPoint(10), EliminateSubQueries) ::
+      Batch("Subqueries", FixedPoint(10), EliminateSubqueryAliases) ::
       Batch("JoinElimination", Once, JoinElimination) :: Nil
   }
 

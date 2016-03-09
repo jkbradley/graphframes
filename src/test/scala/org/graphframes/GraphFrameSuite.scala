@@ -81,7 +81,7 @@ class GraphFrameSuite extends SparkFunSuite with GraphFrameTestSparkContext {
     val idsFromVertices = g.vertices.select("id").rdd.map(_.getLong(0)).collect()
     val idsFromVerticesSet = idsFromVertices.toSet
     assert(idsFromVertices.length === idsFromVerticesSet.size)
-    val idsFromEdgesSet = g.edges.select("src", "dst").flatMap { case Row(src: Long, dst: Long) =>
+    val idsFromEdgesSet = g.edges.select("src", "dst").rdd.flatMap { case Row(src: Long, dst: Long) =>
       Seq(src, dst)
     }.collect().toSet
     assert(idsFromVerticesSet === idsFromEdgesSet)

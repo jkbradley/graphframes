@@ -79,13 +79,12 @@ private object ShortestPaths {
       mapToLandmark(g.vertices(DISTANCE_ID))
         .cast(MapType(idType, IntegerType, valueContainsNull = false))
     } else {
-      val mapToLandmark = udf { (distances: Seq[Row]) =>
+      val mapToLandmark = udf({ (distances: Seq[Row]) =>
         distances.map { case Row(k: Long, v: Int) =>
           longIdToLandmark(k) -> v
         }.toMap
-      }
+      }, MapType(idType, IntegerType, valueContainsNull = false))
       mapToLandmark(col(DISTANCE_ID))
-        .cast(MapType(idType, IntegerType, valueContainsNull = false))
     }
     val cols = graph.vertices.columns.map(col) :+ distanceCol.as(DISTANCE_ID)
     g.vertices.select(cols: _*)
