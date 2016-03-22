@@ -96,6 +96,7 @@ class GraphFrame(object):
     def __repr__(self):
         return self._jvm_graph.toString()
 
+    @property
     def outDegrees(self):
         """
         The out-degree of each vertex in the graph, returned as a DataFrame with two columns:
@@ -109,6 +110,7 @@ class GraphFrame(object):
         jdf = self._jvm_graph.outDegrees()
         return DataFrame(jdf, self._sqlContext)
 
+    @property
     def inDegrees(self):
         """
         The in-degree of each vertex in the graph, returned as a DataFame with two columns:
@@ -122,6 +124,7 @@ class GraphFrame(object):
         jdf = self._jvm_graph.inDegrees()
         return DataFrame(jdf, self._sqlContext)
 
+    @property
     def degrees(self):
         """
         The degree of each vertex in the graph, returned as a DataFrame with two columns:
@@ -155,7 +158,10 @@ class GraphFrame(object):
 
         :return: DataFrame with one Row for each shortest path between matching vertices.
         """
-        builder = self._jvm_graph.bfs(fromExpr, toExpr).maxPathLength(maxPathLength)
+        builder = self._jvm_graph.bfs()\
+            .fromExpr(fromExpr)\
+            .toExpr(toExpr)\
+            .maxPathLength(maxPathLength)
         if edgeFilter is not None:
             builder.edgeFilter(edgeFilter)
         jdf = builder.run()
@@ -169,24 +175,24 @@ class GraphFrame(object):
 
         See Scala documentation for more details.
 
-        :return: GraphFrame with new vertices column "component"
+        :return: DataFrame with new vertices column "component"
         """
-        jgf = self._jvm_graph.connectedComponents().run()
-        return _from_java_gf(jgf, self._sqlContext)
+        jdf = self._jvm_graph.connectedComponents().run()
+        return DataFrame(jdf, self._sqlContext)
 
-    def labelPropagation(self, maxSteps):
+    def labelPropagation(self, maxIter):
         """
         Runs static label propagation for detecting communities in networks.
 
         See Scala documentation for more details.
 
-        :param maxSteps: the number of super steps to be performed
-        :return: GraphFrame with new vertices column "label"
+        :param maxIter: the number of iterations to be performed
+        :return: DataFrame with new vertices column "label"
         """
-        jgf = self._jvm_graph.labelPropagation().maxSteps(maxSteps).run()
-        return _from_java_gf(jgf, self._sqlContext)
+        jdf = self._jvm_graph.labelPropagation().maxIter(maxIter).run()
+        return DataFrame(jdf, self._sqlContext)
 
-    def pageRank(self, resetProbability = 0.15, sourceId = None, numIter = None,
+    def pageRank(self, resetProbability = 0.15, sourceId = None, maxIter = None,
                  tol = None):
         """
         Runs the PageRank algorithm on the graph.
@@ -196,7 +202,7 @@ class GraphFrame(object):
 
         :param resetProbability: Probability of resetting to a random vertex.
         :param sourceId: (optional) the source vertex for a personalized PageRank.
-        :param numIter: If set, the algorithm is run for a fixed number
+        :param maxIter: If set, the algorithm is run for a fixed number
                of iterations. This may not be set if the `tol` parameter is set.
         :param tol: If set, the algorithm is run until the given tolerance.
                This may not be set if the `numIter` parameter is set.
@@ -205,11 +211,11 @@ class GraphFrame(object):
         builder = self._jvm_graph.pageRank().resetProbability(resetProbability)
         if sourceId is not None:
             builder = builder.sourceId(sourceId)
-        if numIter is not None:
-            builder = builder.numIter(numIter)
-            assert tol is None, "Exactly one of numIter or tol shoud be set."
+        if maxIter is not None:
+            builder = builder.maxIter(maxIter)
+            assert tol is None, "Exactly one of maxIter or tol should be set."
         else:
-            assert tol is not None, "Exactly one of numIter or tol shoud be set."
+            assert tol is not None, "Exactly one of maxIter or tol should be set."
             builder = builder.tol(tol)
         jgf = builder.run()
         return _from_java_gf(jgf, self._sqlContext)
@@ -221,22 +227,22 @@ class GraphFrame(object):
         See Scala documentation for more details.
 
         :param landmarks: a set of one or more landmarks
-        :return: GraphFrame with new vertices column "distances"
+        :return: DataFrame with new vertices column "distances"
         """
-        jgf = self._jvm_graph.shortestPaths().landmarks(landmarks).run()
-        return _from_java_gf(jgf, self._sqlContext)
+        jdf = self._jvm_graph.shortestPaths().landmarks(landmarks).run()
+        return DataFrame(jdf, self._sqlContext)
 
-    def stronglyConnectedComponents(self, numIter):
+    def stronglyConnectedComponents(self, maxIter):
         """
         Runs the strongly connected components algorithm on this graph.
 
         See Scala documentation for more details.
 
-        :param numIter: the number of iterations to run
-        :return: GraphFrame with new vertex column "component"
+        :param maxIter: the number of iterations to run
+        :return: DataFrame with new vertex column "component"
         """
-        jgf = self._jvm_graph.stronglyConnectedComponents().numIter(numIter).run()
-        return _from_java_gf(jgf, self._sqlContext)
+        jdf = self._jvm_graph.stronglyConnectedComponents().maxIter(maxIter).run()
+        return DataFrame(jdf, self._sqlContext)
 
     def svdPlusPlus(self, rank = 10, maxIter = 2, minValue = 0.0, maxValue = 5.0,
                     gamma1 = 0.007, gamma2 = 0.007, gamma6 = 0.005, gamma7 = 0.015):
@@ -245,16 +251,16 @@ class GraphFrame(object):
 
         See Scala documentation for more details.
 
-        :return: GraphFrame with new vertex columns storing learned model.
+        :return: DataFrame with new vertex columns storing learned model.
         """
         # This call is actually useless, because one needs to build the configuration first...
         builder = self._jvm_graph.svdPlusPlus()
         builder.rank(rank).maxIter(maxIter).minValue(minValue).maxValue(maxValue)
         builder.gamma1(gamma1).gamma2(gamma2).gamma6(gamma6).gamma7(gamma7)
-        jgf = builder.run()
+        jdf = builder.run()
         loss = builder.loss()
-        gf = _from_java_gf(jgf, self._sqlContext)
-        return (gf, loss)
+        v = DataFrame(jdf, self._sqlContext)
+        return (v, loss)
 
     def triangleCount(self):
         """
@@ -262,10 +268,10 @@ class GraphFrame(object):
 
         See Scala documentation for more details.
 
-        :return:  GraphFrame with new vertex column "count"
+        :return:  DataFrame with new vertex column "count"
         """
-        jgf = self._jvm_graph.triangleCount().run()
-        return _from_java_gf(jgf, self._sqlContext)
+        jdf = self._jvm_graph.triangleCount().run()
+        return DataFrame(jdf, self._sqlContext)
 
 
 def _test():

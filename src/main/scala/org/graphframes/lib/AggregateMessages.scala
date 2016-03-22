@@ -17,7 +17,6 @@
 
 package org.graphframes.lib
 
-import org.apache.spark.Logging
 import org.apache.spark.sql.SQLHelpers.expr
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Column, DataFrame}
@@ -129,7 +128,7 @@ class AggregateMessages private[graphframes] (private val g: GraphFrame)
   }
 }
 
-object AggregateMessages extends Logging with Serializable {
+object AggregateMessages extends Serializable {
 
   /** Reference for source column, used for specifying messages */
   def src: Column = col(GraphFrame.SRC)

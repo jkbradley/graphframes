@@ -18,13 +18,14 @@
 package org.graphframes.lib
 
 import org.apache.spark.graphx.{lib => graphxlib}
+import org.apache.spark.sql.DataFrame
 
 import org.graphframes.GraphFrame
 
 /**
  * Run static Label Propagation for detecting communities in networks.
  *
- * Each node in the network is initially assigned to its own community. At every superstep, nodes
+ * Each node in the network is initially assigned to its own community. At every iteration, nodes
  * send their community affiliation to all neighbors and update their state to the mode community
  * affiliation of incoming messages.
  *
@@ -32,36 +33,35 @@ import org.graphframes.GraphFrame
  * computationally, although (1) convergence is not guaranteed and (2) one can end up with
  * trivial solutions (all nodes are identified into a single community).
  *
- * The resulting vertices DataFrame contains one additional column:
+ * The resulting DataFrame contains all the original vertex information and one additional column:
  *  - label: (same type as vertex id) label of community affiliation
  *
- * The resulting edges DataFrame is the same as the original edges DataFrame.
  */
 class LabelPropagation private[graphframes] (private val graph: GraphFrame) extends Arguments {
 
-  private var maxSteps: Option[Int] = None
+  private var maxIter: Option[Int] = None
 
   /**
-   * The number of supersteps of LPA to be performed. Because this is a static
-   * implementation, the algorithm will run for exactly this many supersteps.
+   * The max number of iterations of LPA to be performed. Because this is a static
+   * implementation, the algorithm will run for exactly this many iterations.
    */
-  def maxSteps(value: Int): this.type = {
-    maxSteps = Some(value)
+  def maxIter(value: Int): this.type = {
+    maxIter = Some(value)
     this
   }
 
-  def run(): GraphFrame = {
+  def run(): DataFrame = {
     LabelPropagation.run(
       graph,
-      check(maxSteps, "maxSteps"))
+      check(maxIter, "maxIter"))
   }
 }
 
 
 private object LabelPropagation {
-  private def run(graph: GraphFrame, maxSteps: Int): GraphFrame = {
-    val gx = graphxlib.LabelPropagation.run(graph.cachedTopologyGraphX, maxSteps)
-    GraphXConversions.fromGraphX(graph, gx, vertexNames = Seq(LABEL_ID))
+  private def run(graph: GraphFrame, maxIter: Int): DataFrame = {
+    val gx = graphxlib.LabelPropagation.run(graph.cachedTopologyGraphX, maxIter)
+    GraphXConversions.fromGraphX(graph, gx, vertexNames = Seq(LABEL_ID)).vertices
   }
 
   private val LABEL_ID = "label"

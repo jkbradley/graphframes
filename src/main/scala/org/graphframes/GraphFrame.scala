@@ -19,7 +19,6 @@ package org.graphframes
 
 import scala.reflect.runtime.universe.TypeTag
 
-import org.apache.spark.Logging
 import org.apache.spark.graphx.{Edge, Graph}
 import org.apache.spark.sql.SQLHelpers._
 import org.apache.spark.sql._
@@ -42,7 +41,7 @@ import org.graphframes.pattern._
  */
 class GraphFrame private(
     @transient private val _vertices: DataFrame,
-    @transient private val _edges: DataFrame) extends Logging with Serializable {
+    @transient private val _edges: DataFrame) extends Serializable {
 
   import GraphFrame._
 
@@ -127,15 +126,17 @@ class GraphFrame private(
   def toGraphX: Graph[Row, Row] = {
     if (hasIntegralIdType) {
       val vv = vertices.select(col(ID).cast(LongType), nestAsCol(vertices, ATTR))
-        .map { case Row(id: Long, attr: Row) => (id, attr) }
+        .rdd.map { case Row(id: Long, attr: Row) => (id, attr) }
       val ee = edges.select(col(SRC).cast(LongType), col(DST).cast(LongType), nestAsCol(edges, ATTR))
-        .map { case Row(srcId: Long, dstId: Long, attr: Row) => Edge(srcId, dstId, attr) }
+        .rdd.map { case Row(srcId: Long, dstId: Long, attr: Row) => Edge(srcId, dstId, attr) }
       Graph(vv, ee)
     } else {
       // Compute Long vertex IDs
-      val vv = indexedVertices.select(LONG_ID, ATTR).map { case Row(long_id: Long, attr: Row) => (long_id, attr) }
-      val ee = indexedEdges.select(LONG_SRC, LONG_DST, ATTR).map { case Row(long_src: Long, long_dst: Long, attr: Row) =>
-        Edge(long_src, long_dst, attr)
+      val vv = indexedVertices.select(LONG_ID, ATTR).rdd.map {
+        case Row(long_id: Long, attr: Row) => (long_id, attr)
+      }
+      val ee = indexedEdges.select(LONG_SRC, LONG_DST, ATTR).rdd.map {
+        case Row(long_src: Long, long_dst: Long, attr: Row) => Edge(long_src, long_dst, attr)
       }
       Graph(vv, ee)
     }
@@ -256,8 +257,7 @@ class GraphFrame private(
    *
    * @param pattern  Pattern specifying a motif to search for.
    * @return  `DataFrame` containing all instances of the motif.
-   *
-   * @group motif
+    * @group motif
    */
   def find(pattern: String): DataFrame =
     findSimple(Nil, None, Pattern.parse(pattern))
@@ -272,20 +272,7 @@ class GraphFrame private(
    *
    * @group stdlib
    */
-  def bfs(fromExpr: Column, toExpr: Column): BFS = new BFS(this, fromExpr, toExpr)
-
-  /**
-   * Breadth-first search (BFS)
-   *
-   * Refer to the documentation of [[org.graphframes.lib.BFS]] for the description of the output.
-   *
-   * @param fromExpr a SQL expression that selects all the source nodes.
-   * @param toExpr a SQL expression that selects all the sink nodes.
-   *
-   * @group stdlib
-   */
-  def bfs(fromExpr: String, toExpr: String): BFS =
-    new BFS(this, expr(fromExpr), expr(toExpr))
+  def bfs: BFS = new BFS(this)
 
   /**
    * This is a primitive for implementing graph algorithms.
@@ -485,24 +472,28 @@ object GraphFrame extends Serializable {
   /**
    * Create a new [[GraphFrame]] from vertex and edge `DataFrame`s.
    *
-   * @param vertices  Vertex DataFrame.  This must include a column "id" containing unique vertex IDs.
+   * @param v  Vertex DataFrame.  This must include a column "id" containing unique vertex IDs.
    *           All other columns are treated as vertex attributes.
-   * @param edges  Edge DataFrame.  This must include columns "src" and "dst" containing source and
+   * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
    *           destination vertex IDs.  All other columns are treated as edge attributes.
    * @return  New [[GraphFrame]] instance
    */
-  def apply(vertices: DataFrame, edges: DataFrame): GraphFrame = {
-    require(vertices.columns.contains(ID),
+  def apply(v: DataFrame, e: DataFrame): GraphFrame = {
+    require(v.columns.contains(ID),
       s"Vertex ID column '$ID' missing from vertex DataFrame, which has columns: "
-        + vertices.columns.mkString(","))
-    require(edges.columns.contains(SRC),
+        + v.columns.mkString(","))
+    require(e.columns.contains(SRC),
       s"Source vertex ID column '$SRC' missing from edge DataFrame, which has columns: "
-        + edges.columns.mkString(","))
-    require(edges.columns.contains(DST),
+        + e.columns.mkString(","))
+    require(e.columns.contains(DST),
       s"Destination vertex ID column '$DST' missing from edge DataFrame, which has columns: "
-        + edges.columns.mkString(","))
+        + e.columns.mkString(","))
 
-    new GraphFrame(vertices, edges)
+    import org.graphframes.joinelimination.JoinEliminationHelper._
+    registerRules(v.sqlContext)
+    val vK = v.uniqueKey(ID)
+    val eK = e.foreignKey(SRC, vK, ID).foreignKey(DST, vK, ID)
+    new GraphFrame(vK, eK)
   }
 
   /**
@@ -511,7 +502,8 @@ object GraphFrame extends Serializable {
    *
    * Note: The [[GraphFrame.vertices]] DataFrame will be persisted at level
    *       `StorageLevel.MEMORY_AND_DISK`.
-   * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
+    *
+    * @param e  Edge DataFrame.  This must include columns "src" and "dst" containing source and
    *           destination vertex IDs.  All other columns are treated as edge attributes.
    * @return  New [[GraphFrame]] instance
    */
@@ -760,65 +752,5 @@ object GraphFrame extends Serializable {
     }
   }
 
-
-  /*
-  // TODO: Add version with uniqueKey, foreignKey from Ankur's branch?
-  def apply(v: DataFrame, e: DataFrame): GraphFrame = {
-    require(v.columns.contains(ID))
-    require(e.columns.contains(SRC_ID) && e.columns.contains(DST_ID))
-    val vK = v.uniqueKey(ID)
-    vK.registerTempTable("vK")
-    val eK = e.foreignKey("src", "vK." + ID).foreignKey("dst", "vK." + ID)
-    new GraphFrame(vK, eK)
-  }
-  */
-
-
-  // ============================ DataFrame utilities ========================================
-
-  // I'm keeping these for now since they might be useful at some point, but they should be
-  // reviewed if ever used.
-  /*
-  /** Drop all given columns from the DataFrame */
-  private def dropAll(df: DataFrame, columns: Seq[String]): DataFrame = {
-    // columns.foldLeft(df) { (df, col) => df.drop(col) }
-    columns.foldLeft(df) { (df, col) =>
-      // This is NOT robust to columns with periods in the names.
-      val splitCol = col.split("\\.")
-      dropCol(df, splitCol)
-    }
-  }
-
-  /**
-   * Drop a column which may be nested.
-   * E.g. dropping "a.src" will remove the "src" field from the struct column "a" but will
-   * not drop the entire "a" column.
-   */
-  private def dropCol(df: DataFrame, splitCol: Array[String]): DataFrame = {
-    // Identify if the column is nested.
-    val col = splitCol.head
-    if (splitCol.length == 1) {
-      df.drop(col)
-    } else {
-      df.schema(col).dataType match {
-        case s: StructType =>
-          val colDF = df.select(s.fieldNames.map(f => df(col + "." + f)) :_*)
-          colDF.show()
-          val droppedDF = dropCol(colDF, splitCol.slice(1, splitCol.length))
-          droppedDF.show()
-          df.drop(col).withColumn(col, nestAsCol(droppedDF, col))
-        case other =>
-          throw new RuntimeException(s"Unknown error in GraphFrame. Expected column $col to be" +
-            s" StructType, but found type: $other")
-      }
-    }
-  }
-  */
-
 }
 
-/**
- * Exception thrown when a parsed pattern for motif finding cannot be translated into a DataFrame
- * query.
- */
-class InvalidPatternException() extends Exception()

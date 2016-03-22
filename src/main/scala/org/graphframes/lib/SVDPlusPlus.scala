@@ -18,7 +18,7 @@
 package org.graphframes.lib
 
 import org.apache.spark.graphx.{Edge, lib => graphxlib}
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 
 import org.graphframes.GraphFrame
 
@@ -27,17 +27,21 @@ import org.graphframes.GraphFrame
  * a Multifaceted Collaborative Filtering Model",
  * available at [[https://movie-datamining.googlecode.com/svn/trunk/kdd08koren.pdf]].
  *
+ * Note: The status of this algorithm is EXPERIMENTAL. Its API and implementation may be changed
+ * in the future.
+ *
  * The prediction rule is r,,ui,, = u + b,,u,, + b,,i,, + q,,i,,*(p,,u,, + |N(u)|^^-0.5^^*sum(y)).
  * See the details on page 6 of the article.
  *
  * Configuration parameters: see the description of each parameter in the article.
  *
- * Returns a graph with vertex attributes containing the trained model.  See object (static) members
- * for names of output columns.
+ * Returns a DataFrame with vertex attributes containing the trained model.  See the object
+ * (static) members for the names of the output columns.
+ *
  */
 class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends Arguments {
   private var _rank: Int = 10
-  private var _maxIters: Int = 2
+  private var _maxIter: Int = 2
   private var _minVal: Double = 0.0
   private var _maxVal: Double = 5.0
   private var _gamma1: Double = 0.007
@@ -53,7 +57,7 @@ class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends A
   }
 
   def maxIter(value: Int): this.type = {
-    _maxIters = value
+    _maxIter = value
     this
   }
 
@@ -87,10 +91,10 @@ class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends A
     this
   }
 
-  def run(): GraphFrame = {
+  def run(): DataFrame = {
     val conf = new graphxlib.SVDPlusPlus.Conf(
       rank = _rank,
-      maxIters = _maxIters,
+      maxIters = _maxIter,
       minVal = _minVal,
       maxVal = _maxVal,
       gamma1 = _gamma1,
@@ -98,9 +102,9 @@ class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends A
       gamma6 = _gamma6,
       gamma7 = _gamma7)
 
-    val (g, l) = SVDPlusPlus.run(graph, conf)
+    val (df, l) = SVDPlusPlus.run(graph, conf)
     _loss = Some(l)
-    g
+    df
   }
 
   def loss: Double = {
@@ -111,14 +115,14 @@ class SVDPlusPlus private[graphframes] (private val graph: GraphFrame) extends A
 
 object SVDPlusPlus {
 
-  private def run(graph: GraphFrame, conf: graphxlib.SVDPlusPlus.Conf): (GraphFrame, Double) = {
-    val edges = graph.edges.select(GraphFrame.SRC, GraphFrame.DST, COLUMN_WEIGHT).map {
+  private def run(graph: GraphFrame, conf: graphxlib.SVDPlusPlus.Conf): (DataFrame, Double) = {
+    val edges = graph.edges.select(GraphFrame.SRC, GraphFrame.DST, COLUMN_WEIGHT).rdd.map {
       case Row(src: Long, dst: Long, w: Double) => Edge(src, dst, w)
     }
     val (gx, res) = graphxlib.SVDPlusPlus.run(edges, conf)
     val gf = GraphXConversions.fromGraphX(graph, gx,
       vertexNames = Seq(COLUMN1, COLUMN2, COLUMN3, COLUMN4))
-    (gf, res)
+    (gf.vertices, res)
   }
 
   /**
