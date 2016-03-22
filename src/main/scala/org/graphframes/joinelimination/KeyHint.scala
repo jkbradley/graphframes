@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.LeftOuter
 import org.apache.spark.sql.catalyst.plans.LeftSemi
 import org.apache.spark.sql.catalyst.plans.RightOuter
+import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.catalyst.plans.logical.Join
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.logical.Project
@@ -50,6 +51,8 @@ object KeyHint {
         case ForeignKey(attr, referencedAttr) if aliasMap.contains(attr) =>
           ForeignKey(aliasMap(attr), referencedAttr)
       }
+
+    case Filter(_, child) => collectKeys(child)
 
     case Join(left, right, joinType, _) =>
       // TODO: try to propagate unique keys as well as foreign keys
