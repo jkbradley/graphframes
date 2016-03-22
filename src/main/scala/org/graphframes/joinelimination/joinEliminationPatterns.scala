@@ -125,7 +125,7 @@ object CanEliminateReferentialIntegrityJoin {
     val foreignKeys = new ForeignKeyFinder(child, parent)
     AttributeMap(parentJoinExprs.zip(childJoinExprs).collect {
       case (parentExpr: NamedExpression, childExpr: NamedExpression) =>
-        primaryKeys.find(_.attr == parentExpr.toAttribute) match {
+        primaryKeys.find(_.attr semanticEquals parentExpr.toAttribute) match {
           case Some(UniqueKey(_, pkId))
               if foreignKeys.foreignKeyExists(childExpr.toAttribute, pkId) =>
             Some((parentExpr.toAttribute, childExpr.toAttribute))
