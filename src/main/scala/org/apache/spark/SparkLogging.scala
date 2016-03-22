@@ -17,4 +17,6 @@
 
 package org.apache.spark
 
+import org.apache.spark.internal.Logging
+
 trait SparkLogging extends Logging

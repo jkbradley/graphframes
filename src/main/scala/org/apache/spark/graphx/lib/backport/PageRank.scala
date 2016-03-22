@@ -20,7 +20,7 @@
 // package org.apache.spark.graphx.lib
 package org.apache.spark.graphx.lib.backport
 
-import org.apache.spark.Logging
+import org.apache.spark.SparkLogging
 import org.apache.spark.graphx._
 
 import scala.language.postfixOps
@@ -62,7 +62,7 @@ import scala.reflect.ClassTag
  * Note that this is not the "normalized" PageRank and as a consequence pages that have no
  * inlinks will have a PageRank of alpha.
  */
-object PageRank extends Logging {
+object PageRank extends SparkLogging {
 
 
   /**

@@ -20,6 +20,7 @@ package org.graphframes.joinelimination
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 
@@ -41,7 +42,8 @@ object JoinEliminationHelper {
     def uniqueKey(col: String): DataFrame =
       new DataFrame(
         df.sqlContext,
-        KeyHintCollapsing(KeyHint(List(UniqueKey(UnresolvedAttribute(col))), df.queryExecution.logical)))
+        KeyHintCollapsing(KeyHint(List(UniqueKey(UnresolvedAttribute(col))), df.queryExecution.logical)),
+        RowEncoder(df.schema))
 
     /**
      * Declares that the values of the given column reference a unique column from another
@@ -61,7 +63,8 @@ object JoinEliminationHelper {
         KeyHintCollapsing(
           KeyHint(
             List(ForeignKey(UnresolvedAttribute(col), referencedKeyId)),
-            df.queryExecution.logical)))
+            df.queryExecution.logical)),
+        RowEncoder(df.schema))
       resultOpt match {
         case Some(result) => result
         case None => throw new ForeignKeyReferenceException(
