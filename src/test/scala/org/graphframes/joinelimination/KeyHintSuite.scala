@@ -173,14 +173,14 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
     checkAnswer(orderCustomerFullOuterJoin, Seq(
       Row(0, 0, "alice"),
       Row(1, 1, "bob"),
-      Row(null, 2, "alice")))
+      Row(0, 2, "alice")))
 
     val orderEmployeeFullOuterJoin = orderEmployeeFullOuterJoinView
       .select(order("id"), employee("id"), employee("name"))
     checkAnswer(orderEmployeeFullOuterJoin, Seq(
       Row(0, 0, "charlie"),
-      Row(1, null, null),
-      Row(null, 1, "dan")))
+      Row(1, 0, null),
+      Row(0, 1, "dan")))
 
     val managerInnerJoin = managerInnerJoinView
       .select(manager("managerId"), $"emp_manager.name",
@@ -214,7 +214,7 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
       Row(0, "alice"),
       Row(1, null),
       Row(2, "alice"),
-      Row(null, "eve")))
+      Row(0, "eve")))
   }
 
   test("can't create foreign key referencing non-unique column") {
@@ -249,7 +249,7 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
       Row(0, "alice"),
       Row(1, "bob"),
       Row(2, "alice"),
-      Row(null, null)))
+      Row(0, null)))
   }
 
   test("do not eliminate referential integrity inner join where foreign key is nullable") {
@@ -267,14 +267,14 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
       .select(order("id"), customer("id"), employee("id"))
     checkAnswer(orderLeftOuterJoinEliminated, Seq(
       Row(0, 0, 0),
-      Row(1, 1, null)))
+      Row(1, 1, 0)))
     checkJoinsEliminated(orderLeftOuterJoinEliminated)
 
     val orderRightOuterJoinEliminated = orderRightOuterJoinView
       .select(order("id"), customer("id"), employee("id"))
     checkAnswer(orderRightOuterJoinEliminated, Seq(
       Row(0, 0, 0),
-      Row(1, 1, null)))
+      Row(1, 1, 0)))
     checkJoinsEliminated(orderRightOuterJoinEliminated)
   }
 
@@ -284,14 +284,14 @@ class KeyHintSuite extends FunSuite with GraphFrameTestSparkContext { self =>
     checkAnswer(orderCustomerFullOuterJoinNotEliminated, Seq(
       Row(0, 0, 0),
       Row(1, 1, 1),
-      Row(null, null, 2)))
+      Row(0, 0, 2)))
 
     val orderEmployeeFullOuterJoinNotEliminated = orderEmployeeFullOuterJoinView
       .select(order("id"), order("employeeId"), employee("id"))
     checkAnswer(orderEmployeeFullOuterJoinNotEliminated, Seq(
       Row(0, 0, 0),
-      Row(1, null, null),
-      Row(null, null, 1)))
+      Row(1, null, 0),
+      Row(0, null, 1)))
   }
 
   test("eliminate referential integrity join despite multiple foreign keys with same referent") {
