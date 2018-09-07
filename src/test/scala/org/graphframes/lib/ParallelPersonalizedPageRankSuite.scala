@@ -17,7 +17,9 @@
 
 package org.graphframes.lib
 
-import org.apache.spark.ml.linalg.SQLDataTypes
+import org.apache.spark.ml.linalg.{SQLDataTypes, SparseVector}
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.types.DataTypes
 
 import org.graphframes.examples.Graphs
@@ -74,29 +76,30 @@ class ParallelPersonalizedPageRankSuite extends SparkFunSuite with GraphFrameTes
       .sourceIds(vertexIds)
       .resetProbability(resetProb)
 
-    // in Spark 2.2+, sourceIds must be smaller than Int.MaxValue
-    // which might not be the case for LONG_ID in graph.indexedVertices
-    intercept[java.lang.IllegalArgumentException] { prc.run() }
-    /*
-    // This code is the original test, which works for Spark 2.1.  Once we fix vertex indexing,
-    // then we can revive this code.  See https://github.com/graphframes/graphframes/issues/235
+    if (isLaterVersion("2.3")) {
       val pr = prc.run()
       val prInvalid = pr.vertices
         .select("pageranks")
         .collect()
         .filter { row: Row =>
-          vertexIds.size != row.getAs[SparseVector](0).size
+          vertexIds.length != row.getAs[SparseVector](0).size
         }
-      assert(prInvalid.size === 0,
-        s"found ${prInvalid.size} entries with invalid number of returned personalized pagerank vector")
+      assert(prInvalid.isEmpty, s"found ${prInvalid.length} entries with invalid number " +
+        s"of returned personalized pagerank vector")
 
       val gRank = pr.vertices
         .filter(col("id") === "g")
         .select("pageranks")
         .first().getAs[SparseVector](0)
-      assert(gRank.numNonzeros === 0,
-        s"User g (Gabby) doesn't connect with a. So its pagerank should be 0 but we got ${gRank.numNonzeros}.")
-    */
+      assert(gRank.numNonzeros === 0, s"User g (Gabby) doesn't connect with a. So its " +
+        s"pagerank should be 0 but we got ${gRank.numNonzeros}.")
+    } else {
+      // in Spark 2.2+, sourceIds must be smaller than Int.MaxValue
+      // which might not be the case for LONG_ID in graph.indexedVertices
+      intercept[java.lang.IllegalArgumentException] {
+        prc.run()
+      }
+    }
   }
 
 }
